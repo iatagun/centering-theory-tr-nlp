@@ -41,6 +41,11 @@ class CenteringState:
     forward_centers: List[str]
     backward_center: Optional[str]
     preferred_center: Optional[str]
+    pronoun_resolutions: Optional[dict] = None
+
+    def __post_init__(self):
+        if self.pronoun_resolutions is None:
+            self.pronoun_resolutions = {}
 
 
 def _load_transition_type():
@@ -140,8 +145,74 @@ def udpipe_parse(nlp, text: str) -> Optional[List[Token]]:
     return tokens
 
 
-def compute_forward_centers(tokens: List[Token]) -> List[str]:
+def resolve_pronouns(tokens: List[Token], prev_state: Optional[CenteringState]) -> dict:
+    """Zamir çözümlemesi yap - geliştirilmiş sayı uyumu ve mesafe kontrolü"""
+    turkish_pronouns = {
+        'o': {'type': 'personal', 'number': 'singular'},
+        'onlar': {'type': 'personal', 'number': 'plural'},
+        'bu': {'type': 'demonstrative', 'number': 'singular'},
+        'bunlar': {'type': 'demonstrative', 'number': 'plural'},
+        'şu': {'type': 'demonstrative', 'number': 'singular'},
+        'şunlar': {'type': 'demonstrative', 'number': 'plural'},
+        'kendisi': {'type': 'reflexive', 'number': 'singular'},
+        'kendileri': {'type': 'reflexive', 'number': 'plural'},
+    }
+    
+    def is_plural(word: str) -> bool:
+        """Türkçe kelimede çoğul kontrolü"""
+        if word.endswith('ler') or word.endswith('lar'):
+            return True
+        if word.endswith('lere') or word.endswith('lara'):
+            return True
+        if word.endswith('lerde') or word.endswith('larda'):
+            return True
+        return False
+    
+    resolutions = {}
+    
+    if prev_state is None or not prev_state.forward_centers:
+        return resolutions
+    
+    for tok in tokens:
+        tok_lower = tok.form.lower()
+        if tok_lower in turkish_pronouns:
+            pron_info = turkish_pronouns[tok_lower]
+            best_match = None
+            best_score = -1
+            
+            for idx, prev_center in enumerate(prev_state.forward_centers):
+                score = 0.0
+                
+                if pron_info['number'] == 'plural':
+                    if is_plural(prev_center):
+                        score += 10.0
+                    else:
+                        score += 1.0
+                else:
+                    if not is_plural(prev_center):
+                        score += 8.0
+                    else:
+                        score += 1.0
+                
+                position_score = (len(prev_state.forward_centers) - idx) / len(prev_state.forward_centers)
+                score += position_score * 3.0
+                score += 2.0
+                
+                if score > best_score:
+                    best_score = score
+                    best_match = prev_center
+            
+            if best_match:
+                resolutions[tok_lower] = best_match
+    
+    return resolutions
+
+
+def compute_forward_centers(tokens: List[Token], pronoun_resolutions: Optional[dict] = None) -> List[str]:
     """Söylemsel merkezleri POS bilgisiyle çıkar"""
+    if pronoun_resolutions is None:
+        pronoun_resolutions = {}
+    
     salience_weights = {
         "nsubj": 4,
         "nsubjpass": 4,
@@ -162,6 +233,19 @@ def compute_forward_centers(tokens: List[Token]) -> List[str]:
 
     centers = []
     for i, tok in enumerate(tokens):
+        tok_lower = tok.form.lower()
+        
+        if tok_lower in pronoun_resolutions:
+            referent = pronoun_resolutions[tok_lower]
+            salience = 0.0
+            if tok.deprel in salience_weights:
+                salience += salience_weights[tok.deprel]
+            salience += pos_weights.get("PRON", 3)
+            position_weight = 1.0 - (i / max(1, len(tokens)))
+            salience += position_weight
+            centers.append((referent, salience, i))
+            continue
+        
         # POS etiketi üzerinden merkez adaylığını kontrol et
         if tok.upos not in {"NOUN", "PROPN", "PRON"}:
             continue
@@ -173,7 +257,7 @@ def compute_forward_centers(tokens: List[Token]) -> List[str]:
             salience += pos_weights[tok.upos]
         position_weight = 1.0 - (i / max(1, len(tokens)))
         salience += position_weight
-        centers.append((tok.form.lower(), salience, i))
+        centers.append((tok_lower, salience, i))
 
     centers.sort(key=lambda x: (-x[1], x[2]))
 
@@ -186,11 +270,14 @@ def compute_forward_centers(tokens: List[Token]) -> List[str]:
     return ordered[:5]
 
 
-def compute_transition(prev_state: Optional[CenteringState], current_cf: List[str]) -> Tuple[Optional[TransitionType], CenteringState]:
+def compute_transition(prev_state: Optional[CenteringState], current_cf: List[str], pronoun_resolutions: Optional[dict] = None) -> Tuple[Optional[TransitionType], CenteringState]:
+    if pronoun_resolutions is None:
+        pronoun_resolutions = {}
+    
     cp = current_cf[0] if current_cf else None
 
     if prev_state is None:
-        state = CenteringState(forward_centers=current_cf, backward_center=None, preferred_center=cp)
+        state = CenteringState(forward_centers=current_cf, backward_center=None, preferred_center=cp, pronoun_resolutions=pronoun_resolutions)
         return None, state
 
     prev_cb = prev_state.backward_center
@@ -212,7 +299,7 @@ def compute_transition(prev_state: Optional[CenteringState], current_cf: List[st
         else:
             transition = TransitionType.ROUGH_SHIFT
 
-    state = CenteringState(forward_centers=current_cf, backward_center=cb, preferred_center=cp)
+    state = CenteringState(forward_centers=current_cf, backward_center=cb, preferred_center=cp, pronoun_resolutions=pronoun_resolutions)
     return transition, state
 
 
@@ -230,8 +317,9 @@ def transition_score(transition: Optional[TransitionType]) -> int:
 
 def score_parse(tokens: List[Token], prev_state: Optional[CenteringState]) -> Tuple[int, CenteringState]:
     """POS etiketleriyle oluşturulan merkezleme skorunu hesapla"""
-    cf = compute_forward_centers(tokens)
-    transition, state = compute_transition(prev_state, cf)
+    pronoun_resolutions = resolve_pronouns(tokens, prev_state)
+    cf = compute_forward_centers(tokens, pronoun_resolutions)
+    transition, state = compute_transition(prev_state, cf, pronoun_resolutions)
     return transition_score(transition), state
 
 
