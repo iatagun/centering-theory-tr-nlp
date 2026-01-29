@@ -15,7 +15,59 @@ Merkezleme kuramı şöyle düşünüyor:
 > "Önceki cümlede 'Ahmet' vardı. Eğer bu 'O' kelimesi bir zamir ise, Ahmet'ten bahsediyor olmalı. O zaman cümleler birbiriyle bağlantılı, söylem tutarlı. Ama eğer 'O' bir isim ise, bambaşka bir şeyden bahsediyoruz demektir. O zaman cümleler kopuk."
 
 Bilgisayar her iki seçeneği deniyor ve **hangisi cümleleri daha tutarlı hale getiriyorsa onu seçiyor!**
+## 🧪 Test Dosyaları
 
+### 1. **demo_stanza_centering.py** - 9 Hata Türü Analizi 🆕 GELİŞTİRİLDİ
+Merkezleme kuramının farklı parser hatalarını nasıl tespit ettiğini gösterir.
+
+**GELİŞTİRİLMİŞ ÖRNEKLERLE SONUÇLAR (v2.0):**
+
+| Hata Türü | Centering Neyi Fark Eder? | Örnek | Sonuç |
+|-----------|---------------------------|-------|-------|
+| **Koreferans** 🆕 | Sayı uyumsuzluğu (-25 ceza) | "Öğrenciler. O oturdu." | ✅ **Başarılı** (2>1) |
+| **Topic drift** | Cb tamamen kaybolur | "Ahmet okuyor. Hava güzel." | ✅ **Başarılı** (2>1) |
+| **Overconfidence** 🆕 | Animacy uyumsuzluğu (-20 ceza) | "Taş oynadı. O yoruldu." | ✅ **Başarılı** (2>1) |
+| **LLM hatası** | Akıcı ama merkezsiz | "Ahmet yedi. Afiyet olsun doydu." | ✅ **Başarılı** (2>1) |
+| POS hatası | Zamir çözümü kopar | "O süt aldı" vs "O anda süt aldı" | ⚖️ Eşit (1=1) |
+| Role hatası | Özne düşer | Pasif: "Mektup yazıldı" | ⚖️ Eşit (2=2) |
+| Attachment | Varlık kaybolur | "Ayşe'nin kedisi" vs "Ayşe kedisinin" | ⚖️ Eşit (2=2) |
+| Chunking | Öbek parçalanır | "Yazılım mühendisi. Yazılım güzel." | ⚖️ Eşit (1=1) |
+| Segmentation | Cf kaotikleşir | Yanlış cümle sınırı | ⚖️ Eşit (1=1) |
+
+**Başarı Oranı:** 4/9 (%44) Başarılı, 5/9 (%56) Belirsiz | **İyileşme: +100%** (2/9 → 4/9)
+
+**Çalıştırma:**
+```bash
+python demo_stanza_centering.py
+```
+
+**🆕 YENİ ÖZELLİKLER (v2.0):**
+- ✅ **Sayı uyumu kontrolü:** Tekil/çoğul zamirleri bileşik isimlerde doğru eşleştirme
+- ✅ **Animacy (canlılık) skoru:** Cansız varlıklara şahıs zamiri ağır ceza (-20)
+- ✅ **Noun phrase chunking:** Bileşik isimler (örn: "öğrenciler_sınıfa") tek varlık olarak işleniyor
+- ✅ **Güçlendirilmiş ceza sistemi:** Sayı uyumsuzluğu -25, animacy uyumsuzluğu -20
+
+**Ana Bulgular:**
+- ✅ **Söylem kopukluğu** tespitinde güçlü (Topic drift, LLM hatası)
+- ✅ **Semantik tutarlılık** tespitinde güçlü (Koreferans, Overconfidence) 🆕
+- ⚖️ **Yapısal detaylarda** henüz zayıf (Chunking, Pasif yapı, Attachment)
+- 📈 **İyileşme:** %22 → %44 başarı oranı (+100%)
+
+**Teknik Detaylar:**
+- Threshold: 5 (zamir çözümlemesi için minimum skor)
+- Animacy bonusu: +15 (canlı varlık), -20 (cansız varlık)
+- Sayı uyumu: +15 (uyumlu), -25 (uyumsuz)
+- Bileşik isim tespiti: `is_plural()` ilk kelimeyi kontrol eder
+
+Detaylı analiz: [GELISMIS_ORNEK_ANALIZ.md](GELISMIS_ORNEK_ANALIZ.md)
+
+### 2. **test_pos_error_centering.py** - POS Hatası Demo
+Simüle edilmiş POS hatalarında merkezleme kuramının reranking başarısını gösterir.
+
+**Çalıştırma:**
+```bash
+python test_pos_error_centering.py
+```
 ## Amaç
 Türkçe bağımlılık çözümlemede UAS/LAS ölçmek ve **Centering Theory** temelli yeniden sıralama (reranking) ile sonuçları iyileştirme fikrini denemek.
 
