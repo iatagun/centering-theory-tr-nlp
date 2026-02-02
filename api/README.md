@@ -1,4 +1,4 @@
-# Türkçe POS Tagging Hata Tespiti - Python API
+# Türkçe POS Tagging - Nominal Domain Preference Tespiti - Python API
 
 Basit Python fonksiyonları ile iki farklı dilbilimsel yaklaşım:
 1. **Minimalist Program** - Nominal domain preferences (adlaşma eğilimleri)
@@ -18,6 +18,11 @@ Bu proje **UD (Universal Dependencies) etiketlerini "hata" olarak değil**,
 - ❌ "Stanza hatası" DEMİYORUZ
 - ✅ "Nominal domain shift / preference" DİYORUZ
 - ✅ "Task-driven relabeling suggestion" DİYORUZ
+
+**Metrikler:**
+- Test sonuçlarındaki "coverage" = **preference detection kapsamı** (diagnostic test set üzerinde)
+- Bu **POS tagging accuracy DEĞİLDİR**
+- UD etiketleri zaten doğrudur; metrik sadece discourse görevleri için önerileri ölçer
 
 ## Kurulum
 

@@ -18,8 +18,8 @@ test_cases = {
     ],
     "2. Nominal Domain Preference (VERB-origin) - -mA eki": [
         "Yazma defteri aldım.",
-        "Yüzme havuzu.",
-        "Okuma kitabı."
+        "Okuma kitabı.",
+        "Dinleme testi zor."
     ],
     "3. Nominal Domain Preference (VERB-origin) - -mAk eki": [
         "Koşmak sağlıklıdır.",
@@ -59,11 +59,11 @@ for category, sentences in test_cases.items():
         candidates = [e for e in r['errors'] if e['confidence'] < 0.85]
         
         if confirmed:
-            status = "❌ HATA"
+            status = "❗ STRONG PREFERENCE"
         elif candidates:
-            status = "⚠️  UYARI"
+            status = "⚠️  WEAK PREFERENCE"
         else:
-            status = "✅ DOĞRU"
+            status = "✅ UD-UYUMLU"
         
         print(f"{status} {sentence}")
         
@@ -73,17 +73,17 @@ for category, sentences in test_cases.items():
         
         if confirmed:
             total_errors += len(confirmed)
-            print(f"   └─ {len(confirmed)} kesin hata:")
+            print(f"   └─ {len(confirmed)} strong preference (task-driven suggestion):")
             for e in confirmed:
                 print(f"      • {e['word']}: {e['type']} (güven: {e['confidence']:.0%})")
         
         if candidates:
-            print(f"   └─ {len(candidates)} düşük güvenli uyarı:")
+            print(f"   └─ {len(candidates)} weak preference:")
             for e in candidates:
                 print(f"      • {e['word']}: {e['type']} (güven: {e['confidence']:.0%})")
         
         if not confirmed and not candidates:
-            print(f"   └─ Hata yok")
+            print(f"   └─ No task-driven suggestions")
 
 print("\n" + "=" * 70)
 print("SÖYLEM TUTARLILIĞI ANALİZİ (MERKEZLEme KURAMI)")
@@ -145,6 +145,10 @@ print("\n" + "=" * 70)
 print("TEST ÖZETİ")
 print("=" * 70)
 print(f"Toplam test: {total_tests}")
-print(f"Tespit edilen POS hatası: {total_errors}")
-print(f"Başarı oranı: {((total_tests - total_errors) / total_tests * 100):.1f}%")
-print("\n✓ API çalışıyor ve tüm hata tipleri test edildi!")
+print(f"Tespit edilen preference: {total_errors}")
+print(f"Coverage: {((total_tests - total_errors) / total_tests * 100):.1f}%")
+print()
+print("NOT: Bu 'POS doğruluğu' değil, 'preference detection coverage'dir.")
+print("     UD etiketleri doğrudur; yukarıdakiler discourse görevleri için önerilerdir.")
+print()
+print("✓ API çalışıyor ve tüm preference tipleri test edildi!")

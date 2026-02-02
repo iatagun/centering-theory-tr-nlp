@@ -268,6 +268,19 @@ class MinimalistPOSErrorDetector:
     # Türkçe adlaşmış sıfat işaretleri
     ADJECTIVAL_NOUNS = ['güzel', 'iyi', 'kötü', 'büyük', 'küçük']  # Genişletilebilir
     
+    # Lexicalized compounds: -mA formu UD'de yaygın olarak NOUN kabul edilir
+    # Bu kelimeler kalıcı ad + baş isim oluşturur, preference üretilmemeli
+    LEXICALIZED_mA = [
+        'yüzme',   # yüzme havuzu/salonu/sporu
+        'koşma',   # koşma parkuru/sporu
+        'kayma',   # kayma taşı
+        'dolma',   # dolma biber (yemek)
+        'sarma',   # sarma (yemek)
+        'basma',   # basma kumaş
+        'boyama',  # boyama işi (ama "boyama defteri" değil)
+        'çizme',   # çizme ayakkabı (ama "çizme defteri" değil)
+    ]
+    
     def __init__(self):
         self.candidate_errors: List[Dict] = []
         self.confirmed_errors: List[Dict] = []
@@ -288,6 +301,13 @@ class MinimalistPOSErrorDetector:
         has_nominal_suffix = any(suffix in item.morphology for suffix in self.NOMINAL_SUFFIXES)
         
         if has_nominal_suffix and item.pos == 'VERB':
+            # -mA eki için lexicalized compound kontrolü
+            if '-mA' in item.morphology:
+                word_stem = item.word.lower().rstrip('aeiouıöüAEIOUİÖÜ')  # Son sesli düşür
+                if any(item.word.lower().startswith(lex) for lex in self.LEXICALIZED_mA):
+                    # Lexicalized compound - preference üretme
+                    return None
+            
             return {
                 'type': POSErrorType.NOUN_VERB_CONFUSION,
                 'item': item,
