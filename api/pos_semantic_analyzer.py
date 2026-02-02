@@ -1,11 +1,14 @@
 """
-Türkçe POS + Semantic Analysis - Structured JSON Output
-========================================================
+Turkish POS & Semantic Analyzer - Main API
+==========================================
 
-Stanza çıktısına POS preferences ve propositional semantics ekler.
+Stanza-based Turkish NLP analyzer with:
+- POS tagging with preferences detection
+- Propositional semantics analysis
+- JSON and CONLL-U output formats
 
 Kullanım:
-    from api.structured_output import analyze_text
+    from api.pos_semantic_analyzer import analyze_text
     
     result = analyze_text("Ali'nin okuduğu kitap burada.")
     print(json.dumps(result, indent=2, ensure_ascii=False))

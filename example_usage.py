@@ -1,12 +1,12 @@
 """
-Structured Output API Kullanım Örneği
-======================================
+POS & Semantic Analyzer API - Kullanım Örnekleri
+=================================================
 
-Bu dosya structured_output.py API'sinin nasıl kullanılacağını gösterir.
+Bu dosya pos_semantic_analyzer.py API'sinin nasıl kullanılacağını gösterir.
 """
 
 import json
-from api.structured_output import analyze_text, analyze_to_conllu
+from api.pos_semantic_analyzer import analyze_text, analyze_to_conllu
 
 def example_json_output():
     """JSON formatında tam Stanza çıktısı + extensions"""
