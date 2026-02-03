@@ -52,11 +52,19 @@ pip install stanza
 
 # Download Turkish model
 python -c "import stanza; stanza.download('tr')"
+
+# PyTorch 2.6+ compatibility (if needed)
+# Add to your script before importing:
+import os
+os.environ['TORCH_FORCE_WEIGHTS_ONLY_LOAD'] = '0'
 ```
 
 ### Basic Usage
 
 ```python
+import os
+os.environ['TORCH_FORCE_WEIGHTS_ONLY_LOAD'] = '0'  # PyTorch 2.6+ compatibility
+
 from api.pos_semantic_analyzer import analyze_text
 import json
 
@@ -165,7 +173,8 @@ centering_test/
 │   ├── test_comprehensive.py         # Full integration tests
 │   ├── test_semantic_integration.py  # Semantic tests
 │   ├── test_minimalist.py           # Minimalist Program tests
-│   └── test_lexicalized.py          # Lexicalized compound tests
+│   ├── test_lexicalized.py          # Lexicalized compound tests
+│   └── test_pos_fixes.py            # POS fixes validation (17 tests)
 │
 ├── data/
 │   └── ud_tr_imst/                   # UD Turkish-IMST corpus
@@ -301,9 +310,21 @@ python tests/test_minimalist.py
 
 # Lexicalized compound test
 python tests/test_lexicalized.py
+
+# POS fixes validation (all fixes verified)
+python tests/test_pos_fixes.py
 ```
 
 ### Test Results
+
+**test_pos_fixes.py**: 17/17 tests passed (100% success) ⭐
+- ✅ -DIK suffix nominal preference (3 tests)
+- ✅ -mA productive vs lexicalized (2 tests)
+- ✅ Generic vs specific propositions (2 tests)
+- ✅ Holistic/Partitive/Habitual predicates (3 tests)
+- ✅ Finite vs non-finite detection (3 tests)
+- ✅ Confidence scoring accuracy (2 tests)
+- ✅ English output format (2 tests)
 
 **test_comprehensive.py**: 10/13 tests passed (76.9% success)
 - ✅ -DIK detection with 95% confidence
@@ -511,9 +532,11 @@ For questions or feedback, please open an issue on GitHub.
 
 ### Recent Updates (February 2025)
 
+- ✅ **Comprehensive test suite**: test_pos_fixes.py with 17 tests (100% passing)
+- ✅ **PyTorch 2.6 compatibility**: Added workaround for Stanza models
 - ✅ **Renamed flagship API**: `structured_output.py` → `pos_semantic_analyzer.py`
 - ✅ **English output**: All semantic fields now in English (holistic/partitive/habitual)
-- ✅ **Fixed imports**: Resolved module path issues
+- ✅ **Fixed imports**: Resolved module path issues in api/main.py
 - ✅ **Aspect=Hab support**: Habitual verbs now correctly detected as finite
 - ✅ **Type safety**: Added getattr for Stanza document access
 - ✅ **Project cleanup**: Removed centering theory module (18 files deleted)
