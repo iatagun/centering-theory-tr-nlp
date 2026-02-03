@@ -76,6 +76,116 @@ def extract_morphology_from_text(text: str) -> List[str]:
     return morphology
 
 
+def analyze_discourse_features(words: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Centering Theory tabanlı söylem özellikleri analizi
+    
+    Returns:
+        {
+            "topic_candidates": List[str],  # Cb (Backward-looking center) adayları
+            "focus_entities": List[str],     # Cf (Forward-looking center) adayları
+            "referential_density": float,    # Referential expression yoğunluğu
+            "anaphora_present": bool,        # Anafor varlığı
+            "discourse_role_distribution": Dict[str, int]
+        }
+    """
+    topic_candidates = []
+    focus_entities = []
+    referential_count = 0
+    anaphora_count = 0
+    
+    discourse_roles = {"topic": 0, "focus": 0, "background": 0}
+    
+    for word in words:
+        upos = word.get("upos", "")
+        deprel = word.get("deprel", "")
+        feats = word.get("feats", "")
+        
+        # Topic adayları (subject, pronoun, definite NPs)
+        if upos == "PRON" or deprel in ["nsubj", "csubj"]:
+            topic_candidates.append(word["text"])
+            discourse_roles["topic"] += 1
+            referential_count += 1
+        
+        # Focus entities (object, new information)
+        elif deprel in ["obj", "iobj", "obl"] and upos in ["NOUN", "PROPN"]:
+            focus_entities.append(word["text"])
+            discourse_roles["focus"] += 1
+        
+        # Background (modifiers, adjuncts)
+        elif deprel in ["amod", "advmod", "nmod"]:
+            discourse_roles["background"] += 1
+        
+        # Anaphora detection (pronouns, demonstratives)
+        if upos == "PRON" or (feats and "prontype=dem" in feats.lower()):
+            anaphora_count += 1
+    
+    total_words = len([w for w in words if w.get("upos") not in ["PUNCT", "SYM"]])
+    referential_density = referential_count / total_words if total_words > 0 else 0.0
+    
+    return {
+        "topic_candidates": topic_candidates[:3],  # En fazla 3 aday
+        "focus_entities": focus_entities[:3],
+        "referential_density": round(referential_density, 2),
+        "anaphora_present": anaphora_count > 0,
+        "discourse_role_distribution": discourse_roles
+    }
+
+
+def analyze_information_structure(words: List[Dict[str, Any]], text: str) -> Dict[str, Any]:
+    """
+    Information structure analysis (given/new, topic/comment)
+    
+    Returns:
+        {
+            "given_entities": List[str],      # Definite, accusative marked
+            "new_entities": List[str],        # Indefinite, bare nominals
+            "topic_position": str,            # "initial" | "medial" | "final"
+            "information_packaging": str      # "topic-comment" | "all-new" | "all-given"
+        }
+    """
+    given_entities = []
+    new_entities = []
+    
+    for word in words:
+        feats = (word.get("feats") or "").lower()
+        upos = word.get("upos", "")
+        
+        # Given information: Case=Acc, demonstratives
+        if upos in ["NOUN", "PROPN"]:
+            if "case=acc" in feats or "prontype=dem" in feats:
+                given_entities.append(word["text"])
+            # New information: bare nominals (Case=Nom, no article)
+            elif "case=nom" in feats:
+                new_entities.append(word["text"])
+    
+    # Topic position (ilk content word)
+    topic_position = "initial"
+    first_content = next((w for w in words if w.get("upos") in ["NOUN", "PROPN", "PRON"]), None)
+    if first_content:
+        word_index = words.index(first_content)
+        total = len(words)
+        if word_index > total * 0.6:
+            topic_position = "final"
+        elif word_index > total * 0.3:
+            topic_position = "medial"
+    
+    # Information packaging
+    if len(given_entities) > len(new_entities):
+        packaging = "all-given"
+    elif len(new_entities) > len(given_entities):
+        packaging = "all-new"
+    else:
+        packaging = "topic-comment"
+    
+    return {
+        "given_entities": given_entities,
+        "new_entities": new_entities,
+        "topic_position": topic_position,
+        "information_packaging": packaging
+    }
+
+
 def is_finite_verb(feats: str) -> bool:
     """FEATS bilgisine bakarak finit fiil olup olmadığını kontrol et"""
     if not feats:
@@ -329,12 +439,27 @@ def analyze_text(text: str, include_semantics: bool = True) -> Dict[str, Any]:
         preferences_summary = []
         for word_data in words:
             if word_data["preference"]:
+                # Discourse role ekle
+                discourse_role = "background"
+                if word_data.get("deprel") in ["nsubj", "csubj"]:
+                    discourse_role = "topic"
+                elif word_data.get("deprel") in ["obj", "iobj", "obl"]:
+                    discourse_role = "focus"
+                
+                # Referential status
+                feats = (word_data.get("feats") or "").lower()
+                referential_status = "indefinite"
+                if "case=acc" in feats or "prontype=dem" in feats:
+                    referential_status = "definite"
+                
                 preferences_summary.append({
                     "word": word_data["text"],
                     "stanza_pos": word_data["upos"],
                     "suggested_pos": word_data["preference"]["expected_pos"],
                     "confidence": word_data["preference"]["confidence"],
-                    "reason": word_data["preference"]["reason"]
+                    "reason": word_data["preference"]["reason"],
+                    "discourse_role": discourse_role,
+                    "referential_status": referential_status
                 })
         
         # Sentence-level semantics
@@ -345,12 +470,18 @@ def analyze_text(text: str, include_semantics: bool = True) -> Dict[str, Any]:
             "semantics": None
         }
         
-        # Propositional semantics ekle
+        # Propositional semantics + discourse features ekle
         if include_semantics:
-            sentence_data["semantics"] = analyze_propositional_semantics(
-                sent.text, 
-                words
-            )
+            base_semantics = analyze_propositional_semantics(sent.text, words)
+            discourse_features = analyze_discourse_features(words)
+            information_structure = analyze_information_structure(words, sent.text)
+            
+            # Semantics'i genişlet
+            if base_semantics:
+                base_semantics["discourse"] = discourse_features
+                base_semantics["information_structure"] = information_structure
+            
+            sentence_data["semantics"] = base_semantics
         
         sentences.append(sentence_data)
     
